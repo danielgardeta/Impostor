@@ -34,23 +34,18 @@ export async function generateCompletionWithHistory(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  // Google requires strictly alternating user/model turns — merge consecutive same-role messages
-  const contents: Array<{ role: 'user' | 'model'; parts: [{ text: string }] }> = [];
-  for (const msg of conversationHistory) {
-    const role = msg.role === 'assistant' ? 'model' : 'user';
-    const last = contents[contents.length - 1];
-    if (last && last.role === role) {
-      last.parts[0].text += '\n\n' + msg.content;
-    } else {
-      contents.push({ role, parts: [{ text: msg.content }] });
-    }
-  }
+  // Gemma 4 31B does not support multi-turn conversations via the Gemini API.
+  // Flatten history into a single prompt so the model gets full context in one turn.
+  const dialogue = conversationHistory
+    .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
+    .join('\n\n');
+
+  const fullPrompt = `${systemPrompt}\n\n---\n\n${dialogue}\n\nTú:`;
 
   const response = await getClient().models.generateContent({
     model: MODEL,
-    contents,
+    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
     config: {
-      systemInstruction: systemPrompt,
       maxOutputTokens: 1024,
     },
   });
