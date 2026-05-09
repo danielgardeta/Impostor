@@ -24,7 +24,6 @@ export async function generateCompletion(
     config: {
       systemInstruction: systemPrompt,
       maxOutputTokens: 4096,
-      responseMimeType: 'application/json',
     },
   });
   return response.text ?? '';
