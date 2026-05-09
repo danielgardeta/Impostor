@@ -36,8 +36,9 @@ app.post('*', async (req, res) => {
 
     return res.json({ responses, cost });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('Error processing question:', error);
-    return res.status(500).json({ error: 'Error generando respuesta. Inténtalo de nuevo.' });
+    return res.status(500).json({ error: msg });
   }
 });
 
