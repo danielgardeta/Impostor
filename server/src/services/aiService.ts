@@ -18,11 +18,12 @@ export async function generateCompletion(
   userPrompt: string,
   _useCache: boolean = false
 ): Promise<string> {
+  // Gemma 4 does not support systemInstruction — embed it in the user prompt instead.
+  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   const response = await getClient().models.generateContent({
     model: MODEL,
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
     config: {
-      systemInstruction: systemPrompt,
       maxOutputTokens: 4096,
     },
   });
