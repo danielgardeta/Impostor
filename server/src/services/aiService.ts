@@ -34,10 +34,17 @@ export async function generateCompletionWithHistory(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  const contents = conversationHistory.map(msg => ({
-    role: (msg.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
-    parts: [{ text: msg.content }],
-  }));
+  // Google requires strictly alternating user/model turns — merge consecutive same-role messages
+  const contents: Array<{ role: 'user' | 'model'; parts: [{ text: string }] }> = [];
+  for (const msg of conversationHistory) {
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    const last = contents[contents.length - 1];
+    if (last && last.role === role) {
+      last.parts[0].text += '\n\n' + msg.content;
+    } else {
+      contents.push({ role, parts: [{ text: msg.content }] });
+    }
+  }
 
   const response = await getClient().models.generateContent({
     model: MODEL,
