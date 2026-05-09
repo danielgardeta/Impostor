@@ -12,6 +12,23 @@ function getClient(): GoogleGenAI {
 }
 
 const MODEL = 'gemma-4-31b-it';
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
 
 export async function generateCompletion(
   systemPrompt: string,
@@ -20,13 +37,15 @@ export async function generateCompletion(
 ): Promise<string> {
   // Gemma 4 does not support systemInstruction — embed it in the user prompt instead.
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-  const response = await getClient().models.generateContent({
-    model: MODEL,
-    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-    config: {
-      maxOutputTokens: 4096,
-    },
-  });
+  const response = await withRetry(() =>
+    getClient().models.generateContent({
+      model: MODEL,
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      config: {
+        maxOutputTokens: 4096,
+      },
+    })
+  );
   return response.text ?? '';
 }
 
@@ -43,13 +62,15 @@ export async function generateCompletionWithHistory(
 
   const fullPrompt = `${systemPrompt}\n\n---\n\n${dialogue}\n\nTú:`;
 
-  const response = await getClient().models.generateContent({
-    model: MODEL,
-    contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-    config: {
-      maxOutputTokens: 1024,
-    },
-  });
+  const response = await withRetry(() =>
+    getClient().models.generateContent({
+      model: MODEL,
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      config: {
+        maxOutputTokens: 1024,
+      },
+    })
+  );
 
   return response.text ?? '';
 }
