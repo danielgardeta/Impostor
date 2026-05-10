@@ -11,7 +11,7 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-const MODEL = 'gemma-4-31b-it';
+const MODEL = 'gemini-2.0-flash';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -35,13 +35,12 @@ export async function generateCompletion(
   userPrompt: string,
   _useCache: boolean = false
 ): Promise<string> {
-  // Gemma 4 does not support systemInstruction — embed it in the user prompt instead.
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   const response = await withRetry(() =>
     getClient().models.generateContent({
       model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       config: {
+        systemInstruction: systemPrompt,
         maxOutputTokens: 4096,
       },
     })
@@ -54,19 +53,16 @@ export async function generateCompletionWithHistory(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  // Gemma 4 31B does not support multi-turn conversations via the Gemini API.
-  // Flatten history into a single prompt so the model gets full context in one turn.
   const dialogue = conversationHistory
     .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
     .join('\n\n');
 
-  const fullPrompt = `${systemPrompt}\n\n---\n\n${dialogue}\n\nTú:`;
-
   const response = await withRetry(() =>
     getClient().models.generateContent({
       model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      contents: [{ role: 'user', parts: [{ text: `${dialogue}\n\nTú:` }] }],
       config: {
+        systemInstruction: systemPrompt,
         maxOutputTokens: 1024,
       },
     })
