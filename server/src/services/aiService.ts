@@ -1,19 +1,19 @@
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 
-let client: GoogleGenAI | null = null;
+let client: Groq | null = null;
 
-function getClient(): GoogleGenAI {
+function getClient(): Groq {
   if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY is not set in environment variables');
-    client = new GoogleGenAI({ apiKey });
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error('GROQ_API_KEY is not set in environment variables');
+    client = new Groq({ apiKey });
   }
   return client;
 }
 
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'llama-3.3-70b-versatile';
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 2000;
+const RETRY_DELAY_MS = 1000;
 
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
@@ -36,16 +36,16 @@ export async function generateCompletion(
   _useCache: boolean = false
 ): Promise<string> {
   const response = await withRetry(() =>
-    getClient().models.generateContent({
+    getClient().chat.completions.create({
       model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: 4096,
-      },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 4096,
     })
   );
-  return response.text ?? '';
+  return response.choices[0]?.message?.content ?? '';
 }
 
 export async function generateCompletionWithHistory(
@@ -53,20 +53,32 @@ export async function generateCompletionWithHistory(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  const dialogue = conversationHistory
-    .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
-    .join('\n\n');
+  // Merge consecutive messages with the same role (required by chat completions APIs)
+  const merged = conversationHistory.reduce<Array<{ role: 'user' | 'assistant'; content: string }>>(
+    (acc, msg) => {
+      const last = acc[acc.length - 1];
+      if (last && last.role === msg.role) {
+        last.content += '\n' + msg.content;
+      } else {
+        acc.push({ ...msg });
+      }
+      return acc;
+    },
+    []
+  );
+
+  const messages: Groq.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
+    ...merged.map(msg => ({ role: msg.role, content: msg.content })),
+  ];
 
   const response = await withRetry(() =>
-    getClient().models.generateContent({
+    getClient().chat.completions.create({
       model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: `${dialogue}\n\nTú:` }] }],
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: 1024,
-      },
+      messages,
+      max_tokens: 1024,
     })
   );
 
-  return response.text ?? '';
+  return response.choices[0]?.message?.content ?? '';
 }
