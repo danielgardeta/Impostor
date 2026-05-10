@@ -11,7 +11,8 @@ function getClient(): Groq {
   return client;
 }
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL_GENERATION = 'llama-3.3-70b-versatile'; // case generation — needs reasoning
+const MODEL_RESPONSE = 'llama-3.1-8b-instant';     // character replies — fast, 500k TPD free
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
@@ -37,7 +38,7 @@ export async function generateCompletion(
 ): Promise<string> {
   const response = await withRetry(() =>
     getClient().chat.completions.create({
-      model: MODEL,
+      model: MODEL_GENERATION,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -74,9 +75,9 @@ export async function generateCompletionWithHistory(
 
   const response = await withRetry(() =>
     getClient().chat.completions.create({
-      model: MODEL,
+      model: MODEL_RESPONSE,
       messages,
-      max_tokens: 1024,
+      max_tokens: 512,
     })
   );
 
