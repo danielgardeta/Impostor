@@ -48,8 +48,9 @@ app.post('*', async (req, res) => {
       revelationNarrative,
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('Error processing accusation:', error);
-    return res.status(500).json({ error: 'Error procesando la acusación. Inténtalo de nuevo.' });
+    return res.status(500).json({ error: msg });
   }
 });
 
