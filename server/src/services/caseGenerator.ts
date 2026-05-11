@@ -120,9 +120,9 @@ Genera un caso completo en JSON con exactamente esta estructura. Devuelve SOLO e
     "breakingPoint": "La pregunta muy concreta, o la confrontación entre dos personajes específicos, que destruye la coartada del topo. Debe requerir cruzar información de múltiples respuestas o hacer la pregunta exacta.",
     "deflectionTargetId": "El id (char_1, char_3 o char_4) del personaje inocente al que el topo puede intentar desviar las sospechas de forma creíble",
     "innocentTheories": {
-      "char_1": "La teoría personal de este personaje inocente sobre lo que ocurrió. Puede ser parcialmente incorrecta pero plausible.",
-      "char_3": "La teoría personal de este personaje inocente. Debe diferir de la de char_1.",
-      "char_4": "La teoría personal de este personaje inocente. Diferente a las anteriores."
+      "char_1": "Sospecha vaga e incompleta. DEBE apuntar a un inocente equivocado o ser completamente inconclusiva. Escrita en primera persona como intuición, no como certeza.",
+      "char_3": "Sospecha diferente a la anterior. Puede apuntar vagamente al topo real pero sin certeza, o a otro inocente. Nunca una acusación directa.",
+      "char_4": "Sospecha diferente a las anteriores. Preferiblemente inconclusiva o que señale al inocente incorrecto. Máximo una frase de intuición."
     }
   }
 }
@@ -131,7 +131,7 @@ IMPORTANTE:
 - El personaje con "isMole: true" DEBE ser char_2 en este ejemplo pero elige cualquier id de char_1 a char_4
 - El "deflectionTargetId" en lieRoadmap debe ser el id de uno de los personajes INOCENTES (no el topo), que tenga algún motivo aparente para ser sospechoso
 - Los secretos personales (personalSecret) de los inocentes deben hacer que parezcan ligeramente evasivos en algún tema — esto crea ambigüedad y dificulta detectar al topo
-- Las teorías de los inocentes (innocentTheories) deben ser distintas entre sí y algunas pueden señalar al topo o a otros inocentes equivocadamente
+- Las teorías de los inocentes (innocentTheories) deben ser VAGAS e INCONCLUSAS: mínimo 2 de las 3 deben señalar a un inocente incorrecto o no tener conclusión clara. Como máximo 1 puede apuntar vagamente al topo, pero nunca con certeza. El jugador no debe poder resolver el caso solo leyendo las teorías de los inocentes
 - Asegúrate de que los 4 personajes tengan personalidades MUY distintas y estilos de habla diferentes
 - La historia debe tener lógica interna consistente
 - El escenario "${scenario}" debe ser central en la trama
