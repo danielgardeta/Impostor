@@ -40,6 +40,7 @@ export function GameScreen({
   const [question, setQuestion] = useState('');
   const [targetMode, setTargetMode] = useState<TargetMode>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [typingCharIds, setTypingCharIds] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -47,7 +48,11 @@ export function GameScreen({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, typingCharIds]);
+
+  useEffect(() => {
+    if (!isLoading) setTypingCharIds([]);
+  }, [isLoading]);
 
   const charIndex = useMemo(
     () => new Map(characters.map((c, i) => [c.id, i])),
@@ -88,6 +93,8 @@ export function GameScreen({
   const handleSend = async () => {
     if (!canSend) return;
     const q = question.trim();
+    const targets = targetMode === 'all' ? characters.map(c => c.id) : selectedIds;
+    setTypingCharIds(targets);
     setQuestion('');
     setSelectedIds([]);
     await onSendQuestion(q, targetMode === 'all' ? 'all' : selectedIds);
@@ -314,6 +321,50 @@ export function GameScreen({
               )}
             </div>
           ))}
+
+          {/* Typing indicators */}
+          {isLoading && typingCharIds.length > 0 && (
+            <div className="space-y-2">
+              {typingCharIds.map(charId => {
+                const char = characters.find(c => c.id === charId);
+                const idx = char ? (charIndex.get(char.id) ?? 0) : 0;
+                const color = CHAR_COLORS[idx];
+                return (
+                  <div key={charId} className="flex gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm font-mono flex-shrink-0 mt-0.5"
+                      style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                    >
+                      {char?.avatar ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="mb-1 flex items-baseline gap-2">
+                        <span className="text-xs font-mono font-semibold" style={{ color: color.text }}>
+                          {char?.name ?? 'Desconocido'}
+                        </span>
+                        <span className="text-muted font-mono" style={{ fontSize: '0.6rem' }}>
+                          {char?.role}
+                        </span>
+                      </div>
+                      <div className="bg-noir-800 border border-noir-600 px-4 py-3 rounded-sm inline-flex items-center gap-1.5">
+                        {[0, 1, 2].map(i => (
+                          <div
+                            key={i}
+                            className="w-2 h-2 rounded-full animate-bounce"
+                            style={{
+                              backgroundColor: color.text,
+                              opacity: 0.6,
+                              animationDelay: `${i * 0.18}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
