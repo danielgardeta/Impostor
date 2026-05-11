@@ -1,20 +1,19 @@
-import Groq from 'groq-sdk';
+import { GoogleGenAI } from '@google/genai';
 
-let client: Groq | null = null;
+let client: GoogleGenAI | null = null;
 
-function getClient(): Groq {
+function getClient(): GoogleGenAI {
   if (!client) {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) throw new Error('GROQ_API_KEY is not set in environment variables');
-    client = new Groq({ apiKey });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set in environment variables');
+    client = new GoogleGenAI({ apiKey });
   }
   return client;
 }
 
-const MODEL_GENERATION = 'llama-3.3-70b-versatile'; // case generation — needs reasoning
-const MODEL_RESPONSE = 'llama-3.1-8b-instant';     // character replies — fast, 500k TPD free
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 1000;
+const MODEL = 'gemma-4-31b-it';
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 3000;
 
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
@@ -31,22 +30,25 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
+function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
 export async function generateCompletion(
   systemPrompt: string,
   userPrompt: string,
   _useCache: boolean = false
 ): Promise<string> {
+  // Gemma 4 does not support systemInstruction — embed it in the user prompt.
+  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   const response = await withRetry(() =>
-    getClient().chat.completions.create({
-      model: MODEL_GENERATION,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 4096,
+    getClient().models.generateContent({
+      model: MODEL,
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      config: { maxOutputTokens: 4096 },
     })
   );
-  return response.choices[0]?.message?.content ?? '';
+  return stripThinking(response.text ?? '');
 }
 
 export async function generateCompletionWithHistory(
@@ -54,32 +56,19 @@ export async function generateCompletionWithHistory(
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  // Merge consecutive messages with the same role (required by chat completions APIs)
-  const merged = conversationHistory.reduce<Array<{ role: 'user' | 'assistant'; content: string }>>(
-    (acc, msg) => {
-      const last = acc[acc.length - 1];
-      if (last && last.role === msg.role) {
-        last.content += '\n' + msg.content;
-      } else {
-        acc.push({ ...msg });
-      }
-      return acc;
-    },
-    []
-  );
+  // Gemma 4 does not support multi-turn — flatten history into a single prompt.
+  const dialogue = conversationHistory
+    .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
+    .join('\n\n');
 
-  const messages: Groq.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    ...merged.map(msg => ({ role: msg.role, content: msg.content })),
-  ];
+  const fullPrompt = `${systemPrompt}\n\n---\n\n${dialogue}\n\nTú:`;
 
   const response = await withRetry(() =>
-    getClient().chat.completions.create({
-      model: MODEL_RESPONSE,
-      messages,
-      max_tokens: 512,
+    getClient().models.generateContent({
+      model: MODEL,
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+      config: { maxOutputTokens: 512 },
     })
   );
-
-  return response.choices[0]?.message?.content ?? '';
+  return stripThinking(response.text ?? '');
 }
