@@ -12,18 +12,17 @@ function getClient(): GoogleGenAI {
 }
 
 const MODEL = 'gemma-4-31b-it';
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 3000;
 
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number, delayMs: number): Promise<T> {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (attempt < MAX_RETRIES) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      console.error(`[aiService] attempt ${attempt}/${maxRetries} failed:`, error);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -34,41 +33,47 @@ function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
+// Case generation: 1 retry, short delay — must finish well under Vercel's 60s limit
 export async function generateCompletion(
   systemPrompt: string,
   userPrompt: string,
   _useCache: boolean = false
 ): Promise<string> {
-  // Gemma 4 does not support systemInstruction — embed it in the user prompt.
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-  const response = await withRetry(() =>
-    getClient().models.generateContent({
-      model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      config: { maxOutputTokens: 4096 },
-    })
+  const response = await withRetry(
+    () =>
+      getClient().models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        config: { maxOutputTokens: 4096 },
+      }),
+    2,
+    1000
   );
   return stripThinking(response.text ?? '');
 }
 
+// Character responses: 3 retries, short delay — output is small so each attempt is fast
 export async function generateCompletionWithHistory(
   systemPrompt: string,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
-  // Gemma 4 does not support multi-turn — flatten history into a single prompt.
   const dialogue = conversationHistory
     .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
     .join('\n\n');
 
   const fullPrompt = `${systemPrompt}\n\n---\n\n${dialogue}\n\nTú:`;
 
-  const response = await withRetry(() =>
-    getClient().models.generateContent({
-      model: MODEL,
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      config: { maxOutputTokens: 512 },
-    })
+  const response = await withRetry(
+    () =>
+      getClient().models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        config: { maxOutputTokens: 512 },
+      }),
+    3,
+    1000
   );
   return stripThinking(response.text ?? '');
 }

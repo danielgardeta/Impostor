@@ -30,6 +30,7 @@ app.post('*', async (req, res) => {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    console.error('[generate-case] Error:', msg);
     return res.status(500).json({ error: msg });
   }
 });
