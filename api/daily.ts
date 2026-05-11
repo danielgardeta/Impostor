@@ -13,7 +13,7 @@ app.use(express.json());
 app.get('*', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `daily_case_${today}`;
+    const cacheKey = `daily_case_v2_${today}`;
 
     try {
       const redis = Redis.fromEnv();
