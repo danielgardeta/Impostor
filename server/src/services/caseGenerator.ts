@@ -55,7 +55,7 @@ Genera un caso completo en JSON con exactamente esta estructura. Devuelve SOLO e
 
 {
   "title": "Título atmosférico noir de 3-6 palabras en español",
-  "description": "2-3 frases de atmósfera noir que describen la situación. Debe crear tensión y misterio. Escrito en presente.",
+  "description": "2-3 frases de atmósfera noir que describen la situación general del escenario. Crea tensión y misterio. Escrito en presente. NO menciones el nombre de ningún personaje — describe el ambiente, no a las personas.",
   "characters": [
     {
       "id": "char_1",
@@ -137,7 +137,8 @@ IMPORTANTE:
 - El escenario "${scenario}" debe ser central en la trama
 - Crea personajes memorables con nombres españoles auténticos
 - La verdad debe ser intrigante pero no inverosímil
-- La coartada del topo debe ser CONVINCENTE y detallada, no obvia`;
+- La coartada del topo debe ser CONVINCENTE y detallada, no obvia
+- El campo "description" NO debe contener nombres de personajes — es atmosférico, no acusatorio`;
 }
 
 export async function generateCase(
@@ -220,6 +221,16 @@ export async function generateCase(
   if (moleChar) {
     moleChar.personalSecret = undefined;
   }
+
+  // Remove character names from the description to avoid spoiling the mole
+  const characterNames = caseData.characters.flatMap(c => c.name.split(' '));
+  let safeDescription = caseData.description;
+  for (const namePart of characterNames) {
+    if (namePart.length > 2) {
+      safeDescription = safeDescription.replace(new RegExp(`\\b${namePart}\\b`, 'gi'), '***');
+    }
+  }
+  caseData.description = safeDescription;
 
   const caseId = seed ? `daily_${seed}` : uuidv4();
 
