@@ -11,7 +11,8 @@ function getClient(): GoogleGenAI {
   return client;
 }
 
-const MODEL = 'gemma-4-31b-it';
+const MODEL_GENERATION = 'gemini-2.0-flash'; // case generation — fast, avoids Vercel 60s timeout
+const MODEL_RESPONSE = 'gemma-4-31b-it';    // character responses — best intelligence for gameplay
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries: number, delayMs: number): Promise<T> {
   let lastError: unknown;
@@ -33,19 +34,18 @@ function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
-// Case generation: 1 retry, short delay — must finish well under Vercel's 60s limit
+// Case generation — uses Flash for speed, must finish well under Vercel's 60s limit
 export async function generateCompletion(
   systemPrompt: string,
   userPrompt: string,
   _useCache: boolean = false
 ): Promise<string> {
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
   const response = await withRetry(
     () =>
       getClient().models.generateContent({
-        model: MODEL,
-        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-        config: { maxOutputTokens: 4096 },
+        model: MODEL_GENERATION,
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        config: { systemInstruction: systemPrompt, maxOutputTokens: 4096 },
       }),
     2,
     1000
@@ -53,12 +53,13 @@ export async function generateCompletion(
   return stripThinking(response.text ?? '');
 }
 
-// Character responses: 3 retries, short delay — output is small so each attempt is fast
+// Character responses — uses Gemma 4 31B for maximum intelligence during gameplay
 export async function generateCompletionWithHistory(
   systemPrompt: string,
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
   _useCache: boolean = true
 ): Promise<string> {
+  // Gemma 4 does not support systemInstruction — embed it in the prompt
   const dialogue = conversationHistory
     .map(msg => (msg.role === 'user' ? `Detective: ${msg.content}` : `Tú: ${msg.content}`))
     .join('\n\n');
@@ -68,7 +69,7 @@ export async function generateCompletionWithHistory(
   const response = await withRetry(
     () =>
       getClient().models.generateContent({
-        model: MODEL,
+        model: MODEL_RESPONSE,
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: { maxOutputTokens: 512 },
       }),
